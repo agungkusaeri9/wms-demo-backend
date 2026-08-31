@@ -3,7 +3,7 @@ version: "3.9"
 services:
   backend:
     build: .
-    container_name: cmwi-backend
+    container_name: wms-demo-backend
     ports:
       - "3210:3000"
     env_file:
@@ -21,7 +21,7 @@ services:
       - "3309:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root_password # Ensure this is a strong password
-      MYSQL_DATABASE: cmwi_db
+      MYSQL_DATABASE: wms_demo_db
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
