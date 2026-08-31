@@ -26,17 +26,12 @@ export class UserController {
         }
     }
 
-    // static async update(req: UserRequest, res: Response, next: NextFunction) {
-    //     try {
-    //         const request: UpdateUserRequest = req.body as UpdateUserRequest;
-    //         const response = await UserService.update(req.user!, request);
-    //         res.status(200).json({
-    //             data: response
-    //         })
-    //     } catch (e) {
-    //         next(e);
-    //     }
-    // }
-
-
+    static async update(req: UserRequest, res: Response, next: NextFunction) {
+        try {
+            const response = await UserService.update(req.username!, req.body);
+            sendSuccess(res, 200, "Update profile & password success", response);
+        } catch (e) {
+            next(e);
+        }
+    }
 }

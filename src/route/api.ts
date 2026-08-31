@@ -9,7 +9,7 @@ apiRouter.use(authMiddleware);
 
 // User
 apiRouter.get("/api/users/current", UserController.get);
-// apiRouter.patch("/api/users/current", UserController.update);
+apiRouter.patch("/api/users/current", UserController.update);
 
 // Stock In
 apiRouter.post("/api/stock-ins", StockInController.create);

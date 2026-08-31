@@ -15,6 +15,8 @@ import { SubMachineController } from "../controller/submachine-controller";
 import { roleMiddleware } from "../middleware/role-middleware";
 import { ManualPurchaseOrderController } from "../controller/manual-purchase-order-controller";
 import { KanbanStaggingController } from "../controller/kanban-stagging-controller";
+import { PurchaseOrderController } from "../controller/purchase-order-controller";
+import { PurchaseRequestController } from "../controller/purchase-request-controller";
 
 export const adminRouter = express.Router();
 adminRouter.use(authMiddleware);
@@ -98,3 +100,9 @@ adminRouter.post(
   "/api/kanban-staggings/forward-to-master",
   KanbanStaggingController.forwardToMaster
 );
+
+// Purchase Order
+adminRouter.post("/api/purchase-orders/import", PurchaseOrderController.importExcel);
+
+// Purchase Request
+adminRouter.post("/api/purchase-requests/import", PurchaseRequestController.importExcel);

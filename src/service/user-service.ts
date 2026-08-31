@@ -57,6 +57,9 @@ export class UserService {
       where: {
         username: username,
       },
+      include: {
+        operator: true,
+      },
     });
 
     if (!user) {
@@ -64,5 +67,47 @@ export class UserService {
     }
 
     return toUserResponse(user);
+  }
+
+  static async update(
+    username: string,
+    request: { name?: string; current_password?: string; new_password?: string }
+  ): Promise<UserResponse> {
+    const user = await prismaClient.user.findUnique({
+      where: { username },
+      include: { operator: true },
+    });
+
+    if (!user) {
+      throw new ResponseError(404, "User not found");
+    }
+
+    const updateData: { name?: string; password?: string } = {};
+
+    if (request.name && request.name.trim() !== "") {
+      updateData.name = request.name.trim();
+    }
+
+    if (request.new_password && request.new_password.trim() !== "") {
+      if (!request.current_password) {
+        throw new ResponseError(400, "Password saat ini wajib diisi untuk mengubah password");
+      }
+      const isPasswordValid = await bcrypt.compare(request.current_password, user.password);
+      if (!isPasswordValid) {
+        throw new ResponseError(400, "Password saat ini tidak sesuai");
+      }
+      if (request.new_password.length < 5) {
+        throw new ResponseError(400, "Password baru minimal 5 karakter");
+      }
+      updateData.password = await bcrypt.hash(request.new_password, 10);
+    }
+
+    const updatedUser = await prismaClient.user.update({
+      where: { username },
+      data: updateData,
+      include: { operator: true },
+    });
+
+    return toUserResponse(updatedUser);
   }
 }

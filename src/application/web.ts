@@ -6,7 +6,8 @@ import cors from "cors";
 import { adminRouter } from "../route/admin-api";
 
 export const web = express();
-web.use(express.json());
+web.use(express.json({ limit: "50mb" }));
+web.use(express.urlencoded({ extended: true, limit: "50mb" }));
 web.use(cors());
 web.use(publicRouter);
 web.use(apiRouter);

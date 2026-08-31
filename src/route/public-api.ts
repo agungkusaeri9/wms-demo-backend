@@ -87,10 +87,12 @@ publicRouter.get("/api/makers/:id", MakerController.show);
 // Purchase Request
 publicRouter.get("/api/purchase-requests", PurchaseRequestController.get);
 publicRouter.get("/api/purchase-requests/:id", PurchaseRequestController.show);
+publicRouter.post("/api/purchase-requests/import", PurchaseRequestController.importExcel);
 
 // Purchase Order
 publicRouter.get("/api/purchase-orders", PurchaseOrderController.get);
 publicRouter.get("/api/purchase-orders/:id", PurchaseOrderController.show);
+publicRouter.post("/api/purchase-orders/import", PurchaseOrderController.importExcel);
 publicRouter.get(
   "/api/manual-purchase-orders",
   ManualPurchaseOrderController.get
