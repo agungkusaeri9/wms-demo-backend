@@ -17,11 +17,19 @@ import { GroupController } from "../controller/group-controller";
 import { RequesterController } from "../controller/requester-controller";
 import { SubMachineController } from "../controller/submachine-controller";
 import { ManualPurchaseOrderController } from "../controller/manual-purchase-order-controller";
+import { HealthController } from "../controller/health-controller";
+
+import { ActivityController } from "../controller/activity-controller";
 
 export const publicRouter = express.Router();
+
+// Health Check
+publicRouter.get("/api/health", HealthController.health);
+
 publicRouter.post("/api/auth/login", UserController.login);
 
-// Main
+// Activities & Stats
+publicRouter.get("/api/activities", ActivityController.getRecent);
 publicRouter.get("/api/statistics", MainController.get);
 
 // Stock In

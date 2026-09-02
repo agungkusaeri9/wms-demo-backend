@@ -1,40 +1,78 @@
 import { prismaClient } from "../application/database";
-import { logger } from "../application/logging";
-import { ResponseError } from "../error/response-error";
 import { StockStat, Stats } from "../model/statistic-model";
 import { getISOWeek, getYear } from "date-fns";
 
-
-
 export class MainService {
     static async get(): Promise<Stats> {
-        const overStock = await prismaClient.kanban.findMany({
-            where: {
-                balance: { gt: prismaClient.kanban.fields.max_quantity },
-            },
-        });
 
-        const underStock = await prismaClient.kanban.findMany({
-            where: {
-                balance: { lt: prismaClient.kanban.fields.min_quantity },
-            },
-        });
+        // ── Tanggal helpers ──────────────────────────────────────────────────
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        const unBalanced = await prismaClient.kanban.findMany({
-            where: {
-                balance: { lt: prismaClient.kanban.fields.js_ending_quantity },
-            },
-        });
+        const dailyFrom = new Date();
+        dailyFrom.setDate(dailyFrom.getDate() - 30);
 
-        const kanbans = await prismaClient.kanban.findMany({
-            where: {
-                balance: { lt: prismaClient.kanban.fields.min_quantity },
-            },
-            include: {
-                purchase_order_detail: true,
-                purchase_request_detail: true,
-            },
-        });
+        const weekFrom = new Date();
+        weekFrom.setMonth(weekFrom.getMonth() - 3);
+
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+
+        // ── Summary cards (parallel queries) ─────────────────────────────────
+        const [
+            totalStockUnitResult,
+            totalSku,
+            inboundTodayResult,
+            outboundTodayResult,
+            overStockList,
+            underStockList,
+            unBalancedList,
+            kanbans,
+        ] = await Promise.all([
+            // Total unit stok: SUM semua balance kanban
+            prismaClient.kanban.aggregate({
+                _sum: { balance: true },
+            }),
+
+            // Total SKU: COUNT semua kanban
+            prismaClient.kanban.count(),
+
+            // Inbound hari ini: SUM qty stock in hari ini
+            prismaClient.stockIn.aggregate({
+                _sum: { quantity: true },
+                where: { created_at: { gte: todayStart, lte: todayEnd } },
+            }),
+
+            // Outbound hari ini: SUM qty stock out hari ini
+            prismaClient.stockOut.aggregate({
+                _sum: { quantity: true },
+                where: { created_at: { gte: todayStart, lte: todayEnd } },
+            }),
+
+            // Over stock
+            prismaClient.kanban.findMany({
+                where: { balance: { gt: prismaClient.kanban.fields.max_quantity } },
+            }),
+
+            // Under stock (kritis)
+            prismaClient.kanban.findMany({
+                where: { balance: { lt: prismaClient.kanban.fields.min_quantity } },
+            }),
+
+            // Unbalanced
+            prismaClient.kanban.findMany({
+                where: { balance: { lt: prismaClient.kanban.fields.js_ending_quantity } },
+            }),
+
+            // Kanbans under stock dengan PO/PR detail (untuk unProcessed)
+            prismaClient.kanban.findMany({
+                where: { balance: { lt: prismaClient.kanban.fields.min_quantity } },
+                include: {
+                    purchase_order_detail: true,
+                    purchase_request_detail: true,
+                },
+            }),
+        ]);
 
         const unProcessed = kanbans.filter(
             (k) =>
@@ -43,19 +81,42 @@ export class MainService {
                 k.purchase_request_detail.filter((pr) => pr.is_active).length === 0
         ).length;
 
-        const dailyFrom = new Date();
-        dailyFrom.setDate(dailyFrom.getDate() - 30);
+        // ── Chart data ───────────────────────────────────────────────────────
+        const [
+            stockInDailyRaw,
+            stockOutDailyRaw,
+            stockInWeeklyRaw,
+            stockOutWeeklyRaw,
+            stockInMonthlyRaw,
+            stockOutMonthlyRaw,
+        ] = await Promise.all([
+            prismaClient.stockIn.findMany({
+                where: { created_at: { gte: dailyFrom } },
+                select: { created_at: true, quantity: true },
+            }),
+            prismaClient.stockOut.findMany({
+                where: { created_at: { gte: dailyFrom } },
+                select: { created_at: true, quantity: true },
+            }),
+            prismaClient.stockIn.findMany({
+                where: { created_at: { gte: weekFrom } },
+                select: { created_at: true, quantity: true },
+            }),
+            prismaClient.stockOut.findMany({
+                where: { created_at: { gte: weekFrom } },
+                select: { created_at: true, quantity: true },
+            }),
+            prismaClient.stockIn.findMany({
+                where: { created_at: { gte: yearStart } },
+                select: { created_at: true, quantity: true },
+            }),
+            prismaClient.stockOut.findMany({
+                where: { created_at: { gte: yearStart } },
+                select: { created_at: true, quantity: true },
+            }),
+        ]);
 
-        const stockInDailyRaw = await prismaClient.stockIn.findMany({
-            where: { created_at: { gte: dailyFrom } },
-            select: { created_at: true, quantity: true },
-        });
-
-        const stockOutDailyRaw = await prismaClient.stockOut.findMany({
-            where: { created_at: { gte: dailyFrom } },
-            select: { created_at: true, quantity: true },
-        });
-
+        // ── Group helpers ────────────────────────────────────────────────────
         const groupByDate = (data: { created_at: Date; quantity: number }[]): StockStat =>
             data.reduce((acc: StockStat, item) => {
                 const key = item.created_at.toISOString().split("T")[0];
@@ -63,45 +124,13 @@ export class MainService {
                 return acc;
             }, {});
 
-        const stockInDaily = groupByDate(stockInDailyRaw);
-        const stockOutDaily = groupByDate(stockOutDailyRaw);
-
-        const weekFrom = new Date();
-        weekFrom.setMonth(weekFrom.getMonth() - 3);
-
-        const stockInWeeklyRaw = await prismaClient.stockIn.findMany({
-            where: { created_at: { gte: weekFrom } },
-            select: { created_at: true, quantity: true },
-        });
-
-        const stockOutWeeklyRaw = await prismaClient.stockOut.findMany({
-            where: { created_at: { gte: weekFrom } },
-            select: { created_at: true, quantity: true },
-        });
-
         const groupByWeek = (data: { created_at: Date; quantity: number }[]): StockStat =>
             data.reduce((acc: StockStat, item) => {
                 const week = getISOWeek(item.created_at);
                 const year = getYear(item.created_at);
-                const key = `${year}-W${week}`;
-                acc[key] = (acc[key] || 0) + item.quantity;
+                acc[`${year}-W${week}`] = (acc[`${year}-W${week}`] || 0) + item.quantity;
                 return acc;
             }, {});
-
-        const stockInWeekly = groupByWeek(stockInWeeklyRaw);
-        const stockOutWeekly = groupByWeek(stockOutWeeklyRaw);
-
-        const yearStart = new Date(new Date().getFullYear(), 0, 1);
-
-        const stockInMonthlyRaw = await prismaClient.stockIn.findMany({
-            where: { created_at: { gte: yearStart } },
-            select: { created_at: true, quantity: true },
-        });
-
-        const stockOutMonthlyRaw = await prismaClient.stockOut.findMany({
-            where: { created_at: { gte: yearStart } },
-            select: { created_at: true, quantity: true },
-        });
 
         const groupByMonth = (data: { created_at: Date; quantity: number }[]): StockStat =>
             data.reduce((acc: StockStat, item) => {
@@ -110,26 +139,30 @@ export class MainService {
                 return acc;
             }, {});
 
-        const stockInMonthly = groupByMonth(stockInMonthlyRaw);
-        const stockOutMonthly = groupByMonth(stockOutMonthlyRaw);
-
         return {
-            overStock: overStock.length,
-            underStock: underStock.length,
-            unBalanced: unBalanced.length,
+            // Summary cards
+            totalStockUnit: totalStockUnitResult._sum.balance ?? 0,
+            totalSku,
+            inboundToday:  inboundTodayResult._sum.quantity  ?? 0,
+            outboundToday: outboundTodayResult._sum.quantity ?? 0,
+
+            // Status stok
+            overStock:   overStockList.length,
+            underStock:  underStockList.length,
+            unBalanced:  unBalancedList.length,
             unProcessed,
+
+            // Chart data
             stockIn: {
-                daily: stockInDaily,
-                weekly: stockInWeekly,
-                monthly: stockInMonthly,
+                daily:   groupByDate(stockInDailyRaw),
+                weekly:  groupByWeek(stockInWeeklyRaw),
+                monthly: groupByMonth(stockInMonthlyRaw),
             },
             stockOut: {
-                daily: stockOutDaily,
-                weekly: stockOutWeekly,
-                monthly: stockOutMonthly,
+                daily:   groupByDate(stockOutDailyRaw),
+                weekly:  groupByWeek(stockOutWeeklyRaw),
+                monthly: groupByMonth(stockOutMonthlyRaw),
             },
         };
     }
 }
-
-
