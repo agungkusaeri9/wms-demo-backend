@@ -18,10 +18,26 @@ import { RequesterController } from "../controller/requester-controller";
 import { SubMachineController } from "../controller/submachine-controller";
 import { ManualPurchaseOrderController } from "../controller/manual-purchase-order-controller";
 import { HealthController } from "../controller/health-controller";
+import { ResetController } from "../controller/reset-controller";
+import { SimulationController } from "../controller/simulation-controller";
+import { ReceivingReportController } from "../controller/receiving-report-controller";
 
 import { ActivityController } from "../controller/activity-controller";
 
 export const publicRouter = express.Router();
+
+// Simulation Endpoints
+publicRouter.post("/api/simulation/full-flow", SimulationController.simulateFullFlow);
+publicRouter.post("/api/kanbans/simulate-full-flow", SimulationController.simulateFullFlow);
+
+// Reset Data Endpoints (Public/Dev/Demo access)
+publicRouter.post("/api/reset-data", ResetController.resetData);
+publicRouter.post("/api/reset/all", ResetController.resetAll);
+publicRouter.post("/api/reset/purchase-orders", ResetController.resetPurchaseOrders);
+publicRouter.post("/api/reset/purchase-requests", ResetController.resetPurchaseRequests);
+publicRouter.post("/api/reset/manual-purchase-orders", ResetController.resetManualPurchaseOrders);
+publicRouter.post("/api/reset/stock-in", ResetController.resetStockIns);
+publicRouter.post("/api/reset/stock-out", ResetController.resetStockOuts);
 
 // Health Check
 publicRouter.get("/api/health", HealthController.health);
@@ -48,6 +64,8 @@ publicRouter.get(
 // Kanban
 publicRouter.get("/api/kanbans", KanbanController.get);
 publicRouter.get("/api/kanbans/:id", KanbanController.show);
+publicRouter.post("/api/kanbans/stock-counters", KanbanController.updateStockCounters);
+publicRouter.patch("/api/kanbans/stock-counters", KanbanController.updateStockCounters);
 
 publicRouter.get("/api/machine-areas", MachineAreaController.get);
 publicRouter.get("/api/machine-areas/:id", MachineAreaController.show);
@@ -94,11 +112,15 @@ publicRouter.get("/api/makers/:id", MakerController.show);
 
 // Purchase Request
 publicRouter.get("/api/purchase-requests", PurchaseRequestController.get);
+publicRouter.get("/api/purchase-requests/next-sequence", PurchaseRequestController.getNextSequence);
+publicRouter.get("/api/purchase-requests/template", PurchaseRequestController.downloadTemplate);
 publicRouter.get("/api/purchase-requests/:id", PurchaseRequestController.show);
 publicRouter.post("/api/purchase-requests/import", PurchaseRequestController.importExcel);
 
 // Purchase Order
 publicRouter.get("/api/purchase-orders", PurchaseOrderController.get);
+publicRouter.get("/api/purchase-orders/next-sequence", PurchaseOrderController.getNextSequence);
+publicRouter.get("/api/purchase-orders/template", PurchaseOrderController.downloadTemplate);
 publicRouter.get("/api/purchase-orders/:id", PurchaseOrderController.show);
 publicRouter.post("/api/purchase-orders/import", PurchaseOrderController.importExcel);
 publicRouter.get(
@@ -109,6 +131,13 @@ publicRouter.get(
   "/api/manual-purchase-orders/:id",
   ManualPurchaseOrderController.show
 );
+
+// Receiving Report
+publicRouter.get("/api/receiving-reports", ReceivingReportController.get);
+publicRouter.get("/api/receiving-reports/next-sequence", ReceivingReportController.getNextSequence);
+publicRouter.get("/api/receiving-reports/template", ReceivingReportController.downloadTemplate);
+publicRouter.get("/api/receiving-reports/:id", ReceivingReportController.show);
+publicRouter.post("/api/receiving-reports/import", ReceivingReportController.importExcel);
 
 // Reminder
 publicRouter.get("/api/reminders", ReminderController.get);

@@ -2,11 +2,16 @@ import xlsx from "xlsx";
 import {
   CreateReceivingReportRequest,
   ReceivingReportRawEntry,
+  ReceivingReportResponse,
+  SearchReceivingReportRequest,
+  toReceivingReportResponse,
 } from "../model/receiving-report-model";
 import { Validation } from "../validation/validation";
 import { ReceivingReportValidation } from "../validation/receiving-report-validation";
 import { prismaClient } from "../application/database";
 import { logger } from "../application/logging";
+import { Pageable } from "../model/page";
+import { ResponseError } from "../error/response-error";
 
 export class ReceivingReportService {
   static async create(filePath: string) {
@@ -143,5 +148,122 @@ export class ReceivingReportService {
         `Error while creating receiving report and updating kanban: ${error}`
       );
     }
+  }
+
+  static async get(
+    request: SearchReceivingReportRequest
+  ): Promise<Pageable<ReceivingReportResponse>> {
+    const filters: any[] = [];
+
+    const keyword = request.keyword || request.kanban;
+    if (keyword) {
+      const cleanKeyword = keyword.replace(/\\/g, "\\\\");
+      filters.push({
+        OR: [
+          {
+            kanban_code: {
+              contains: cleanKeyword,
+            },
+          },
+          {
+            Kanban: {
+              specification: {
+                contains: cleanKeyword,
+              },
+            },
+          },
+          {
+            Kanban: {
+              description: {
+                contains: cleanKeyword,
+              },
+            },
+          },
+        ],
+      });
+    }
+
+    if (request.start_date) {
+      filters.push({
+        created_at: {
+          gte: new Date(request.start_date),
+        },
+      });
+    }
+
+    if (request.end_date) {
+      const endDate = new Date(request.end_date);
+      endDate.setHours(23, 59, 59, 999);
+      filters.push({
+        created_at: {
+          lte: endDate,
+        },
+      });
+    }
+
+    const whereClause = filters.length > 0 ? { AND: filters } : {};
+
+    const page = request.page || 1;
+    const limit = request.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const [total, reports] = await Promise.all([
+      prismaClient.receivingReport.count({
+        where: whereClause,
+      }),
+      prismaClient.receivingReport.findMany({
+        where: whereClause,
+        take: request.paginate !== false ? limit : undefined,
+        skip: request.paginate !== false ? skip : undefined,
+        orderBy: {
+          created_at: "desc",
+        },
+        include: {
+          Kanban: {
+            include: {
+              rack: true,
+              maker: true,
+              supplier: true,
+              machine_area: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPage = Math.ceil(total / limit);
+
+    return {
+      data: reports.map(toReceivingReportResponse),
+      pagination: {
+        total,
+        curr_page: page,
+        limit,
+        total_page: totalPage,
+      },
+    };
+  }
+
+  static async show(id: number): Promise<ReceivingReportResponse> {
+    const report = await prismaClient.receivingReport.findUnique({
+      where: { id },
+      include: {
+        Kanban: {
+          include: {
+            rack: true,
+            maker: true,
+            supplier: true,
+            machine_area: true,
+            machine: true,
+          },
+        },
+      },
+    });
+
+    if (!report) {
+      throw new ResponseError(404, "Receiving report not found");
+    }
+
+    return toReceivingReportResponse(report);
   }
 }

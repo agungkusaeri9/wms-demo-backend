@@ -168,4 +168,22 @@ export class KanbanController {
       next(e);
     }
   }
+
+  static async updateStockCounters(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const response = await KanbanService.updateStockCounters(req.body || {});
+      sendSuccess(
+        res,
+        200,
+        "Update stock in quantity & incoming order stock success",
+        response
+      );
+    } catch (e) {
+      next(e);
+    }
+  }
 }

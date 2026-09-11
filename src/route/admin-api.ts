@@ -17,10 +17,26 @@ import { ManualPurchaseOrderController } from "../controller/manual-purchase-ord
 import { KanbanStaggingController } from "../controller/kanban-stagging-controller";
 import { PurchaseOrderController } from "../controller/purchase-order-controller";
 import { PurchaseRequestController } from "../controller/purchase-request-controller";
+import { ResetController } from "../controller/reset-controller";
+import { SimulationController } from "../controller/simulation-controller";
+import { ReceivingReportController } from "../controller/receiving-report-controller";
 
 export const adminRouter = express.Router();
 adminRouter.use(authMiddleware);
 adminRouter.use(roleMiddleware);
+
+// Simulation Endpoints
+adminRouter.post("/api/simulation/full-flow", SimulationController.simulateFullFlow);
+adminRouter.post("/api/kanbans/simulate-full-flow", SimulationController.simulateFullFlow);
+
+// Reset Data Endpoints
+adminRouter.post("/api/reset-data", ResetController.resetData);
+adminRouter.post("/api/reset/all", ResetController.resetAll);
+adminRouter.post("/api/reset/purchase-orders", ResetController.resetPurchaseOrders);
+adminRouter.post("/api/reset/purchase-requests", ResetController.resetPurchaseRequests);
+adminRouter.post("/api/reset/manual-purchase-orders", ResetController.resetManualPurchaseOrders);
+adminRouter.post("/api/reset/stock-in", ResetController.resetStockIns);
+adminRouter.post("/api/reset/stock-out", ResetController.resetStockOuts);
 
 // Operator
 adminRouter.post("/api/operators", OperatorController.create);
@@ -60,6 +76,8 @@ adminRouter.get(
   KanbanController.exportBalanceToExcel
 );
 adminRouter.patch("/api/kanbans/:id/restore", KanbanController.restoreKanban);
+adminRouter.post("/api/kanbans/stock-counters", KanbanController.updateStockCounters);
+adminRouter.patch("/api/kanbans/stock-counters", KanbanController.updateStockCounters);
 
 // Supplier
 adminRouter.post("/api/suppliers", SupplierController.create);
@@ -102,7 +120,18 @@ adminRouter.post(
 );
 
 // Purchase Order
+adminRouter.get("/api/purchase-orders/next-sequence", PurchaseOrderController.getNextSequence);
+adminRouter.get("/api/purchase-orders/template", PurchaseOrderController.downloadTemplate);
 adminRouter.post("/api/purchase-orders/import", PurchaseOrderController.importExcel);
 
 // Purchase Request
+adminRouter.get("/api/purchase-requests/next-sequence", PurchaseRequestController.getNextSequence);
+adminRouter.get("/api/purchase-requests/template", PurchaseRequestController.downloadTemplate);
 adminRouter.post("/api/purchase-requests/import", PurchaseRequestController.importExcel);
+
+// Receiving Report
+adminRouter.get("/api/receiving-reports", ReceivingReportController.get);
+adminRouter.get("/api/receiving-reports/next-sequence", ReceivingReportController.getNextSequence);
+adminRouter.get("/api/receiving-reports/template", ReceivingReportController.downloadTemplate);
+adminRouter.get("/api/receiving-reports/:id", ReceivingReportController.show);
+adminRouter.post("/api/receiving-reports/import", ReceivingReportController.importExcel);

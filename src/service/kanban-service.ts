@@ -1205,4 +1205,132 @@ export class KanbanService {
       },
     });
   }
+
+  /**
+   * Set or update stock_in_quantity and incoming_order_stock for kanban(s)
+   */
+  static async updateStockCounters(request: {
+    kanban_code?: string;
+    stock_in_quantity?: number;
+    incoming_order_stock?: number;
+    items?: Array<{
+      kanban_code: string;
+      stock_in_quantity?: number;
+      incoming_order_stock?: number;
+    }>;
+    auto_populate?: boolean;
+    limit?: number;
+  }) {
+    // 1. Single kanban update
+    if (request.kanban_code) {
+      const code = request.kanban_code.trim();
+      const stockInQty = request.stock_in_quantity ?? 0;
+      const incomingOrderStock =
+        request.incoming_order_stock ?? Math.max(stockInQty, 0);
+
+      const existing = await prismaClient.kanban.findFirst({
+        where: { code },
+      });
+
+      if (!existing) {
+        throw new ResponseError(
+          404,
+          `Kanban dengan kode '${code}' tidak ditemukan`
+        );
+      }
+
+      const updated = await prismaClient.kanban.update({
+        where: { id: existing.id },
+        data: {
+          stock_in_quantity: stockInQty,
+          incoming_order_stock: incomingOrderStock,
+        },
+      });
+
+      return {
+        updated_count: 1,
+        items: [
+          {
+            code: updated.code,
+            stock_in_quantity: updated.stock_in_quantity,
+            incoming_order_stock: updated.incoming_order_stock,
+            balance: updated.balance,
+          },
+        ],
+      };
+    }
+
+    // 2. Multiple items update
+    if (
+      request.items &&
+      Array.isArray(request.items) &&
+      request.items.length > 0
+    ) {
+      const results: Array<{
+        code: string;
+        stock_in_quantity: number;
+        incoming_order_stock: number;
+      }> = [];
+
+      for (const item of request.items) {
+        if (!item.kanban_code) continue;
+        const code = item.kanban_code.trim();
+        const stockInQty = item.stock_in_quantity ?? 0;
+        const incomingOrderStock =
+          item.incoming_order_stock ?? Math.max(stockInQty, 0);
+
+        const updated = await prismaClient.kanban.updateMany({
+          where: { code },
+          data: {
+            stock_in_quantity: stockInQty,
+            incoming_order_stock: incomingOrderStock,
+          },
+        });
+
+        if (updated.count > 0) {
+          results.push({
+            code,
+            stock_in_quantity: stockInQty,
+            incoming_order_stock: incomingOrderStock,
+          });
+        }
+      }
+
+      return {
+        updated_count: results.length,
+        items: results,
+      };
+    }
+
+    // 3. Bulk / Auto populate active kanbans
+    const stockInQty = request.stock_in_quantity ?? 10;
+    const incomingOrderStock =
+      request.incoming_order_stock ?? Math.max(stockInQty, 20);
+    const limit = request.limit ?? 20;
+
+    const kanbans = await prismaClient.kanban.findMany({
+      where: { deleted_at: null },
+      take: limit,
+      select: { id: true, code: true },
+    });
+
+    const kanbanIds = kanbans.map((k) => k.id);
+
+    await prismaClient.kanban.updateMany({
+      where: { id: { in: kanbanIds } },
+      data: {
+        stock_in_quantity: stockInQty,
+        incoming_order_stock: incomingOrderStock,
+      },
+    });
+
+    return {
+      updated_count: kanbans.length,
+      items: kanbans.map((k) => ({
+        code: k.code,
+        stock_in_quantity: stockInQty,
+        incoming_order_stock: incomingOrderStock,
+      })),
+    };
+  }
 }

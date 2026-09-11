@@ -3,10 +3,21 @@ import path from "path";
 import fs from "fs";
 import { CreatePurchaseOrderRequest, SearchPurchaseOrderRequest } from "../model/purchase-order-model";
 import { PurchaseOrderService } from "../service/purchase-order-service";
+import { ProcessedFileService } from "../service/processed-file-service";
 import { sendSuccess } from "../helper/response-helper";
 import { ResponseError } from "../error/response-error";
 
 export class PurchaseOrderController {
+    static async getNextSequence(req: Request, res: Response, next: NextFunction) {
+        try {
+            const date = req.query.date as string | undefined;
+            const result = await ProcessedFileService.getNextSequence("PO", date);
+            sendSuccess(res, 200, "Get next PO sequence success", result);
+        } catch (e) {
+            next(e);
+        }
+    }
+
     static async get(req: Request, res: Response, next: NextFunction) {
         try {
             const request: SearchPurchaseOrderRequest = {
@@ -57,6 +68,9 @@ export class PurchaseOrderController {
 
             try {
                 await PurchaseOrderService.create(tempFilePath);
+                if (filename) {
+                    await ProcessedFileService.recordProcessedFile(filename, "PO");
+                }
             } finally {
                 if (fs.existsSync(tempFilePath)) {
                     try {
@@ -66,6 +80,27 @@ export class PurchaseOrderController {
             }
 
             sendSuccess(res, 200, "Import Purchase Order berhasil!");
+        } catch (e) {
+            next(e);
+        }
+    }
+
+    static async downloadTemplate(req: Request, res: Response, next: NextFunction) {
+        try {
+            const possiblePaths = [
+                path.resolve(__dirname, "../../template_file/TemplatePurchaseOrder.xlsb"),
+                path.join(process.cwd(), "template_file", "TemplatePurchaseOrder.xlsb"),
+                path.join(process.cwd(), "..", "wms-demo-backend", "template_file", "TemplatePurchaseOrder.xlsb"),
+            ];
+
+            const foundPath = possiblePaths.find((p) => fs.existsSync(p));
+            if (!foundPath) {
+                throw new ResponseError(404, "File template Purchase Order tidak ditemukan.");
+            }
+
+            res.setHeader("Content-Disposition", "attachment; filename=TemplatePurchaseOrder.xlsb");
+            res.setHeader("Content-Type", "application/vnd.ms-excel.sheet.binary.macroEnabled.12");
+            return res.sendFile(foundPath);
         } catch (e) {
             next(e);
         }
